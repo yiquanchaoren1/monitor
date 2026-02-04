@@ -1,0 +1,32 @@
+{
+    "global": {
+        "description": "Real Solver Test (Correct Path)",
+        "input_dir": "./",
+        "output_dir": "./V/",
+        "clean_solver_results": true,
+        "loop":1 ,
+        "interval": 1
+    },
+    "jobs": [
+        {
+            "case_name": "8GPU_1",
+            "input": "input_64x64x64_8.json",
+            "node_layout": [
+                {
+                "hostname": "node043",
+                "proc_per_node": 1,  
+                "gpus_per_proc": 1
+                },
+                {
+                "hostname": "node044",
+                "proc_per_node": 1,
+                "gpus_per_proc": 1
+                }
+                
+            ],
+            "solver_bin": "/nfs1/dmxsolver2023-releases/dmxsol-7836/dmxsol",
+            "visualize": [ "cpu", "gpu_util", "memory", "gpu_mem", "power", "network"]
+        }
+            
+    ]
+}
