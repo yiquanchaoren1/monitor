@@ -1,0 +1,4 @@
+/nfs4/hzb/monitor/v15/dmxperf/build/CMakeFiles/deviceQuery.dir
+/nfs4/hzb/monitor/v15/dmxperf/build/CMakeFiles/topologyQuery.dir
+/nfs4/hzb/monitor/v15/dmxperf/build/CMakeFiles/edit_cache.dir
+/nfs4/hzb/monitor/v15/dmxperf/build/CMakeFiles/rebuild_cache.dir
