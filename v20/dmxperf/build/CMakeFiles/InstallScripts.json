@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/nfs4/hzb/monitor/v15/dmxperf/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
