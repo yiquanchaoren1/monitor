@@ -1,3 +1,4 @@
+# dmxperf/agents/host_agent.py
 # -*- coding: utf-8 -*-
 import argparse
 import time
@@ -66,33 +67,24 @@ class AsyncWriter:
 
 class NetworkMonitor:
     def __init__(self):
-        # 1. IB 物理层 (RDMA网卡)
         self.ib_phys = self._scan_ib_physical()
         self.ib_names = [x[0] for x in self.ib_phys]
-        
-        # 2. 以太网 物理层 (普通网卡)
-        # 注意: 这里的扫描会严格检查设备是否包含 'device' 链接，确保是物理硬件
         self.eth_phys = self._scan_eth_physical()
         self.eth_names = [x[0] for x in self.eth_phys]
-        
-        print(f"[NetMon] ⚡ IB物理设备 (Total): {self.ib_names}")
-        print(f"[NetMon] 🔌 以太网物理设备 (TCP/IP): {self.eth_names}")
         
         self.last_stats = self._read_counters()
         self.last_time = time.time()
 
     def _scan_ib_physical(self):
-        """直接扫描 /sys/class/infiniband 下的硬件计数器"""
         base = "/sys/class/infiniband"
         devices = []
         if not os.path.exists(base): return []
         
-        # 优先级: 64位计数器 > 普通计数器 > 字节计数器
         candidates = [("port_rcv_data_64", "port_xmit_data_64"), 
                       ("port_rcv_data", "port_xmit_data"), 
                       ("rx_bytes", "tx_bytes")]
         try:
-            for dev in sorted(os.listdir(base)): # mlx5_0, mlx5_1...
+            for dev in sorted(os.listdir(base)): 
                 ports_dir = os.path.join(base, dev, "ports")
                 if not os.path.exists(ports_dir): continue
                 
@@ -100,10 +92,8 @@ class NetworkMonitor:
                     cnt_path = os.path.join(ports_dir, port, "counters")
                     if not os.path.isdir(cnt_path): continue
                     
-                    # 只要能找到计数器文件，就监控它
                     for rx, tx in candidates:
                         if os.path.exists(os.path.join(cnt_path, tx)):
-                            # 命名格式: mlx5_0_port1
                             name = f"{dev}_port{port}"
                             devices.append((name, cnt_path, (rx, tx)))
                             break
@@ -111,7 +101,6 @@ class NetworkMonitor:
         return devices
 
     def _scan_eth_physical(self):
-        """扫描 /sys/class/net，只保留物理网卡"""
         base = "/sys/class/net"
         devices = []
         if not os.path.exists(base): return []
@@ -119,34 +108,23 @@ class NetworkMonitor:
         try:
             for iface in sorted(os.listdir(base)):
                 if iface == "lo": continue
-                
                 iface_path = os.path.join(base, iface)
-                
-                # === 关键过滤: 检查是否存在 'device' 符号链接 ===
-                # 虚拟网卡(bond, vlan, veth)通常没有指向物理PCI设备的device链接
                 if not os.path.exists(os.path.join(iface_path, "device")):
                     continue
                 
-                # 如果是 IB 网卡生成的网络接口(如 ib0, ibs3f1)，虽然有device，但流量通常包含在 IB物理层里
-                # 不过为了保险起见，我们保留它，用户自己决定看哪个
-                
                 stat_path = os.path.join(iface_path, "statistics")
                 if os.path.exists(stat_path):
-                    # 记录: (接口名, 路径)
                     devices.append((iface, stat_path))
         except: pass
         return devices
 
     def _read_counters(self):
         stats = {}
-        
-        # 1. 读取 IB 物理层
         for name, path, (rx_n, tx_n) in self.ib_phys:
             try:
                 r = 0; t = 0
                 with open(os.path.join(path, rx_n), 'r') as f:
                     v = int(f.read().strip())
-                    # 如果不是字节计数器，乘以4 (Infiniband计数器特性: 1 unit = 4 bytes)
                     if "packet" not in rx_n and "bytes" not in rx_n: v *= 4
                     r = v
                 with open(os.path.join(path, tx_n), 'r') as f:
@@ -156,7 +134,6 @@ class NetworkMonitor:
                 stats[f"IB_{name}"] = {'rx': r, 'tx': t}
             except: pass
 
-        # 2. 读取以太网 物理层
         for name, path in self.eth_phys:
             try:
                 r = 0; t = 0
@@ -166,25 +143,16 @@ class NetworkMonitor:
                     t = int(f.read().strip())
                 stats[f"ETH_{name}"] = {'rx': r, 'tx': t}
             except: pass
-            
         return stats
 
     def collect(self):
         curr = self._read_counters()
         res = {}
-        
-        # 统一计算差值
         for key, curr_val in curr.items():
             last_val = self.last_stats.get(key, {'rx': 0, 'tx': 0})
-            
             dr = max(0, curr_val['rx'] - last_val['rx'])
             dt = max(0, curr_val['tx'] - last_val['tx'])
-            
-            res[key] = {
-                'rx_mb': dr / 1048576.0,
-                'tx_mb': dt / 1048576.0
-            }
-
+            res[key] = {'rx_mb': dr / 1048576.0, 'tx_mb': dt / 1048576.0}
         self.last_stats = curr
         return res
 
@@ -202,42 +170,66 @@ class HostAgent:
         
         self.net_mon = NetworkMonitor()
         
-        # === 动态构建表头 ===
-        # 格式: Timestamp, IB_mlx5_0_port1_Rx, IB_mlx5_0_port1_Tx, ETH_ens2f0_Rx...
         self.col_keys = []
-        # IB列
-        for name in self.net_mon.ib_names:
-            self.col_keys.append(f"IB_{name}")
-        # ETH列
-        for name in self.net_mon.eth_names:
-            self.col_keys.append(f"ETH_{name}")
+        for name in self.net_mon.ib_names: self.col_keys.append(f"IB_{name}")
+        for name in self.net_mon.eth_names: self.col_keys.append(f"ETH_{name}")
             
         self.net_header = "Timestamp"
-        for key in self.col_keys:
-            self.net_header += f",{key}_Rx_MB,{key}_Tx_MB"
+        for key in self.col_keys: self.net_header += f",{key}_Rx_MB,{key}_Tx_MB"
 
         print(f"[HostAgent] 启动成功: Node={self.node}")
         print(f"[HostAgent] 物理层监控列: {self.col_keys}")
 
+    # === [关键修复] 重新实现 _get_pids 以精准过滤 ===
     def _get_pids(self):
         pids = []
         target_token = f"/{self.target_name}/"
         my_pid = os.getpid()
+        
+        # 黑名单: 排除启动器、Shell、以及 Agent 自身
+        # 在这里显式加入 dmx_host_agent 和 dmx_device_agent
+        BLACKLIST = {
+            "mpirun", "mpiexec", "orterun", "hydra_pmi_proxy", "srun", 
+            "bash", "sh", "zsh", "csh", "tcsh",                        
+            "ssh", "sshd", "sudo", "su",
+            "dmxperf", "dmx_host_agent", "dmx_device_agent" # <--- 核心修复
+        }
+
         try:
             for pid_str in os.listdir('/proc'):
                 if not pid_str.isdigit(): continue
                 pid = int(pid_str)
                 if pid == my_pid: continue
+                
                 try:
                     with open(f"/proc/{pid}/cmdline", 'rb') as f:
                         content = f.read()
                         if not content: continue
                         args = content.split(b'\0')
+                        
                         exe_path = args[0].decode(errors='ignore')
+                        exe_name = os.path.basename(exe_path)
                         full_cmd = b" ".join(args).decode(errors='ignore')
-                        if "dmxperf" in full_cmd: continue 
-                        if target_token in exe_path or exe_path.startswith(f"./{self.target_name}") or target_token in full_cmd:
-                            pids.append(pid)
+
+                    # 1. 黑名单过滤 (现在包含了 dmx_host_agent)
+                    if exe_name in BLACKLIST: continue
+                    
+                    # 2. 额外防护: 命令行包含自身名字的也不要
+                    if "dmxperf" in full_cmd or "dmx_host_agent" in full_cmd or "dmx_device_agent" in full_cmd: 
+                        continue
+
+                    # 3. 目标匹配逻辑
+                    is_target = False
+                    if target_token in exe_path:
+                        is_target = True
+                    elif exe_path.startswith(f"./{self.target_name}"):
+                        is_target = True
+                    elif ("python" in exe_name or "python3" in exe_name) and target_token in full_cmd:
+                        is_target = True
+                    
+                    if is_target:
+                        pids.append(pid)
+
                 except: continue
         except: pass
         return pids
@@ -268,27 +260,22 @@ class HostAgent:
             while running:
                 ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                # 1. 内存
                 try:
                     with open('/proc/meminfo') as f: mem = {l.split(':')[0]: int(l.split()[1]) for l in f}
                     sys_mem = (mem['MemTotal'] - mem.get('MemAvailable', mem['MemFree'])) / 1024
                     self.writer.write("", "system_memory.csv", ts, f"{sys_mem:.1f}")
                 except: pass
 
-                # 2. 网络 (纯物理层)
                 try:
                     net_data = self.net_mon.collect()
                     val_list = []
-                    # 严格按照 Header 顺序拼接
                     for key in self.col_keys:
                         d = net_data.get(key, {'rx_mb':0.0, 'tx_mb':0.0})
                         val_list.append(f"{d['rx_mb']:.4f}")
                         val_list.append(f"{d['tx_mb']:.4f}")
-                        
                     self.writer.write("", "network_metrics.csv", ts, ",".join(val_list), header=self.net_header)
                 except: pass
 
-                # 3. 进程
                 for pid in self._get_pids():
                     c, r = self._collect_proc(pid)
                     self.writer.write(pid, "proc_cpu_util.csv", ts, c)
