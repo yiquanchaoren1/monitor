@@ -1,2 +1,3 @@
+# dmxperf/workloads/__init__.py
 # -*- coding: utf-8 -*-
-# 模块: __init__.py
+

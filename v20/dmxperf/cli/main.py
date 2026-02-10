@@ -41,7 +41,7 @@ Usage:
                         例如: ./dmxperf --gemm 16384 10
                         设置卡数:CUDA_VISIBLE_DEVICES=0,1,2,3 ./release/bin/dmxperf --gemm
 
-  --native              [原生帮助] 查看底层工具原始 Help。
+  --native              [原生帮助] 查看底层工具原始 Help, 例如：dmxperf --bandwidth --native。
 
 """
 

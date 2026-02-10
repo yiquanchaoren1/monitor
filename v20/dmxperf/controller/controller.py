@@ -110,7 +110,6 @@ class PerfController:
             self.involved_nodes.update(nodes_list)
             
             print(f"│   ├── Workload: DmxSolver")
-            # === [修改点 2] 移除 Loop/Interval/Clean 的打印，保持简洁 ===
             print(f"│   └── Nodes: {nodes_list}")
 
             # === 2. Monitor Start ===
