@@ -1,0 +1,52 @@
+{
+    "global": {
+        "description": "Cluster Acceptance & Solver Test",
+        "input_dir": "./",
+        "output_dir": "./acceptance_run",
+        "clean_solver_results": true,
+        "loop": 1
+    },
+    "jobs": [
+        {
+            "case_name": "01_Check_GEMM",
+            "case_type": "hardware",
+            "args": "gemm 1638 10", 
+            "node_layout": [ "node066", "node067" ]
+        },
+        {
+            "case_name": "02_Check_Bandwidth",
+            "case_type": "hardware",
+            "args": "bandwidth --mode=range --start=1073741824 --end=1073741824 --increment=1",
+            "node_layout": [ "node066", "node067" ]
+        },
+        {
+            "case_name": "03_Check_Bus",
+            "case_type": "hardware",
+            "args": "bus -a",
+            "node_layout": [ "node066", "node067" ]
+        },
+        {
+            "case_name": "04_GPU_Burn",
+            "case_type": "hardware",
+            "args": "burn 5",
+            "node_layout": [ "node066", "node067" ]
+        },
+        {
+            "case_name": "05_GPU_topo",
+            "case_type": "hardware",
+            "args": "topo",
+            "node_layout": [ "node066", "node067" ]
+        },
+        {
+            "case_name": "06_Solver_Run",
+            "case_type": "ivc",
+            "input": "input_64x64x64_8.json",
+            "solver_bin": "/nfs1/dmxsolver2023-releases/dmxsol-7836/dmxsol",
+            "node_layout": [
+                { "hostname": "node067", "proc_per_node": 2, "gpus_per_proc": 2 },
+                { "hostname": "node066", "proc_per_node": 2, "gpus_per_proc": 2 }
+            ],
+            "visualize": [ "cpu", "gpu_util", "memory", "gpu_mem", "power", "network"]
+        }
+    ]
+}
